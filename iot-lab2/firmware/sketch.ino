@@ -22,9 +22,11 @@
 
 #define SITE        "ptit"              // đổi thành tên nhóm/lớp
 #define LOCATION    "lab"               // tag vị trí
-#define DEVICE_ID   "esp32-tung-01"     // nên chứa MSSV để không trùng
+#define DEVICE_ID   "B23DCCN904"     // nên chứa MSSV để không trùng
 
 #define PUBLISH_INTERVAL_MS 2000        // DHT22 cần tối thiểu 2 giây
+// Wokwi thường chạy chậm hơn thời gian thực nên đồng hồ ESP32 bị trôi -> đồng bộ NTP lại định kỳ
+#define NTP_RESYNC_MS       300000      // 5 phút
 
 // 1 = thỉnh thoảng tạo spike / mất gói giả lập để có dữ liệu thử tiền xử lý.
 // Nhớ ghi rõ trong báo cáo nếu bật.
@@ -45,6 +47,7 @@ char topicTelemetry[96];
 char topicStatus[96];
 uint32_t seq = 0;
 unsigned long lastPublish = 0;
+unsigned long lastNtpSync = 0;
 
 // ---------- Tiện ích ----------
 uint64_t epochMs() {
@@ -123,6 +126,7 @@ void setup() {
 
   connectWiFi();
   syncTime();
+  lastNtpSync = millis();
   mqtt.setServer(MQTT_HOST, MQTT_PORT);
   mqtt.setBufferSize(512);
   mqtt.setKeepAlive(30);
@@ -135,6 +139,11 @@ void loop() {
   mqtt.loop();
 
   unsigned long now = millis();
+  if (now - lastNtpSync >= NTP_RESYNC_MS) {
+    lastNtpSync = now;
+    configTime(0, 0, "pool.ntp.org", "time.google.com");   // không chặn; giờ cập nhật khi có phản hồi
+    Serial.println("[NTP] Resync requested");
+  }
   if (now - lastPublish < PUBLISH_INTERVAL_MS) return;
   lastPublish = now;
 

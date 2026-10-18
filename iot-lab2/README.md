@@ -168,8 +168,10 @@ Kết quả: `reports/latency_summary.csv` (số gói, tốc độ gói/giây, �
 | tag | `device_id`, `location`, `site` | string | Dùng để lọc, được đánh index |
 | field | `temperature`, `humidity`, `light` | float | °C, %RH, lux |
 | field | `light_raw`, `motion`, `rssi`, `uptime_s`, `seq` | int | |
-| field | `latency_ms` | float | Thời điểm ingest nhận − `ts` của thiết bị |
-| time | `ts` | ms | Thời điểm đo tại thiết bị |
+| field | `latency_ms` | float | Thời điểm ingest nhận − `ts` của thiết bị (bỏ trống nếu đồng hồ thiết bị lệch quá `MAX_CLOCK_SKEW_MS`) |
+| field | `device_ts` | int | `ts` gốc do thiết bị gửi (ms) |
+| field | `clock_offset_ms` | int | Giờ server − giờ thiết bị, để theo dõi đồng hồ bị trôi |
+| time | `ts` hoặc giờ server | ms | Thời điểm đo tại thiết bị; dùng giờ server khi đồng hồ thiết bị lệch |
 
 Measurement `pipeline_stats` (tag `component=ingest`): `received`, `written`, `invalid`, `duplicate`, `lost`, `reboot`, `loss_pct`, `lat_avg_ms`, `lat_p95_ms`, `lat_max_ms`, `write_avg_ms`, `backlog`.
 
@@ -202,5 +204,6 @@ Measurement `pipeline_stats` (tag `component=ingest`): `received`, `written`, `i
 
 - **Wokwi không kết nối được tới `localhost`**, vì vậy firmware dùng broker public. Broker public không có xác thực, ai cũng đọc được topic, chỉ phù hợp cho bài thực hành.
 - **PubSubClient chỉ publish QoS 0**, nên phát hiện mất gói dựa vào `seq` chứ không dựa vào cơ chế QoS.
-- **Độ trễ đo được phụ thuộc đồng hồ thiết bị.** Khi Wokwi chạy chậm hơn thời gian thực (xem chỉ số % tốc độ mô phỏng), đồng hồ ESP32 bị trôi và `latency_ms` sẽ tăng dần. Nên chạy trên máy đủ mạnh và ghi nhận hiện tượng này trong báo cáo.
+- **Độ trễ đo được phụ thuộc đồng hồ thiết bị.** Wokwi thường chạy chậm hơn thời gian thực (xem % tốc độ mô phỏng) nên đồng hồ ESP32 bị trôi, có thể lệch tới hàng giờ. Firmware đồng bộ NTP lại mỗi 5 phút. Ở phía server, nếu `|giờ nhận − ts|` vượt `MAX_CLOCK_SKEW_MS` (mặc định 10 s), gói được lưu theo giờ server, trường `latency_ms` bị bỏ trống và bộ đếm `clock_skew` tăng; độ lệch luôn được lưu ở trường `clock_offset_ms` để phân tích.
+- **Wokwi tạm dừng mô phỏng khi tab bị ẩn.** Mở Wokwi ở một cửa sổ trình duyệt riêng và để hiển thị trong lúc thu dữ liệu.
 - Không commit file `.env` lên GitHub.

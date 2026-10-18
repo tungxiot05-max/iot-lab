@@ -40,7 +40,6 @@ def test_int_temperature_is_cast_to_float():
     (payload(humidity=120), "ngoài dải"),
     (payload(temperature=-50), "ngoài dải"),
     (payload(ts=12345), "NTP"),
-    (payload(ts=NOW + 120_000), "tương lai"),
     (payload(device_id="other"), "không khớp"),
     ('{"device_id":"esp32-tung-01","seq":1,"ts":%d,"temperature":NaN,"humidity":50}' % NOW, "NaN"),
 ])

@@ -138,6 +138,11 @@ def build() -> dict:
     P.append(panel("Độ trễ theo chu kỳ thống kê (30 s)", "timeseries", 12, y, 12, 8,
                    [stat("lat_avg_ms", "Trung bình"), stat("lat_p95_ms", "p95"), stat("lat_max_ms", "Max"),
                     stat("write_avg_ms", "Thời gian ghi DB")], "ms", 1))
+    y += 8
+    P.append(panel("Độ lệch đồng hồ thiết bị so với server", "timeseries", 0, y, 24, 7,
+                   [q_field(RAW, "sensor_raw", "clock_offset_ms", "Giờ server − giờ thiết bị")], "ms", 0,
+                   desc="Lệch quá MAX_CLOCK_SKEW_MS thì gói được lưu theo giờ server và không tính độ trễ. "
+                        "Wokwi chạy chậm hơn thời gian thực làm đường này tăng dần; firmware đồng bộ NTP lại mỗi 5 phút."))
     return {
         "uid": "iot-lab2", "title": "IoT Lab 2 – Giám sát cảm biến", "tags": ["iot", "lab2"],
         "timezone": "browser", "editable": True, "refresh": "5s", "schemaVersion": 39,

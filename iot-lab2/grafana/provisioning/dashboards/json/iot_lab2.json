@@ -1150,6 +1150,54 @@
           "mode": "multi"
         }
       }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "Độ lệch đồng hồ thiết bị so với server",
+      "description": "Lệch quá MAX_CLOCK_SKEW_MS thì gói được lưu theo giờ server và không tính độ trễ. Wokwi chạy chậm hơn thời gian thực làm đường này tăng dần; firmware đồng bộ NTP lại mỗi 5 phút.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 24,
+        "h": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "influxdb"
+          },
+          "query": "from(bucket: \"iot_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"sensor_raw\" and r._field == \"clock_offset_ms\")\n  |> keep(columns: [\"_time\", \"_value\"])\n  |> set(key: \"_field\", value: \"Giờ server − giờ thiết bị\")\n  |> group(columns: [\"_field\"])\n  |> sort(columns: [\"_time\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 0,
+          "custom": {
+            "lineWidth": 2,
+            "pointSize": 4,
+            "showPoints": "auto",
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
     }
   ]
 }

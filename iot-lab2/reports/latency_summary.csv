@@ -1,0 +1,2 @@
+device_id,packets,duration_min,rate_msg_per_s,lat_min_ms,lat_mean_ms,lat_p50_ms,lat_p95_ms,lat_p99_ms,lat_max_ms,lat_std_ms,clock_skew_packets,clock_offset_avg_s,expected_by_seq,lost,loss_pct
+B23DCCN904,228,21.8,0.174,1677.0,4869.5,4866.0,7747.8,8004.8,8069.0,2749.8,224,343.5,228,0,0.0

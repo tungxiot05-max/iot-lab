@@ -46,6 +46,7 @@ class Settings:
     raw_retention_s: int
     processed_retention_s: int
     stats_interval_s: int
+    max_clock_skew_ms: int
 
 
 def load_settings() -> Settings:
@@ -62,4 +63,5 @@ def load_settings() -> Settings:
         raw_retention_s=parse_duration(_env("INFLUX_RAW_RETENTION", "7d")),
         processed_retention_s=parse_duration(_env("INFLUX_PROCESSED_RETENTION", "30d")),
         stats_interval_s=int(_env("STATS_INTERVAL_S", "30")),
+        max_clock_skew_ms=int(_env("MAX_CLOCK_SKEW_MS", "10000")),
     )

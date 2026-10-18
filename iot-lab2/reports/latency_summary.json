@@ -1,0 +1,20 @@
+[
+  {
+    "device_id": "B23DCCN904",
+    "packets": 228,
+    "duration_min": 21.8,
+    "rate_msg_per_s": 0.174,
+    "lat_min_ms": 1677.0,
+    "lat_mean_ms": 4869.5,
+    "lat_p50_ms": 4866.0,
+    "lat_p95_ms": 7747.8,
+    "lat_p99_ms": 8004.8,
+    "lat_max_ms": 8069.0,
+    "lat_std_ms": 2749.8,
+    "clock_skew_packets": 224,
+    "clock_offset_avg_s": 343.5,
+    "expected_by_seq": 228,
+    "lost": 0,
+    "loss_pct": 0.0
+  }
+]

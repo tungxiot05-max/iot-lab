@@ -5,7 +5,7 @@ datasources:
     uid: influxdb
     type: influxdb
     access: proxy
-    url: http://influxdb:8086
+    url: http://localhost:8086
     isDefault: true
     jsonData:
       version: Flux

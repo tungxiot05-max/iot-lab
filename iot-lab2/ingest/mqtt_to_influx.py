@@ -36,15 +36,18 @@ def now_ms() -> int:
     return time.time_ns() // 1_000_000
 
 
-def to_point(rec: dict, latency_ms: float) -> Point:
+def to_point(rec: dict, ts_ms: int, latency_ms: float | None, clock_offset_ms: int) -> Point:
     p = (
         Point(MEASUREMENT_RAW)
         .tag("device_id", rec["device_id"])
         .tag("location", rec["location"])
         .tag("site", rec["site"])
-        .time(rec["ts"], WritePrecision.MS)
-        .field("latency_ms", float(latency_ms))
+        .time(ts_ms, WritePrecision.MS)
+        .field("device_ts", int(rec["ts"]))
+        .field("clock_offset_ms", int(clock_offset_ms))
     )
+    if latency_ms is not None:
+        p = p.field("latency_ms", float(latency_ms))
     # Ép kiểu cố định: InfluxDB từ chối nếu cùng field lúc float lúc int
     for key in ("temperature", "humidity", "light"):
         if key in rec:
@@ -73,9 +76,11 @@ class Ingestor:
         self.tracker = SeqTracker()
         self.backlog: deque[Point] = deque(maxlen=BACKLOG_MAX)
         self.counters = dict(received=0, written=0, invalid=0, duplicate=0, out_of_order=0,
-                             lost=0, reboot=0, write_errors=0)
-        self.window_latency: list[float] = []   # device -> ingest (ms)
+                             lost=0, reboot=0, write_errors=0, clock_skew=0)
+        self.window_latency: list[float] = []   # device -> ingest (ms), chỉ khi đồng hồ tin cậy
+        self.window_offset: list[float] = []    # độ lệch giờ ingest - giờ thiết bị (ms)
         self.window_write: list[float] = []     # thời gian ghi DB (ms)
+        self.max_skew_ms = settings.max_clock_skew_ms
         self.started = time.time()
 
         self.client = None
@@ -154,8 +159,18 @@ class Ingestor:
             elif res.status == "out_of_order":
                 self.counters["out_of_order"] += 1
 
-            latency = t_recv - rec["ts"]
-            point = to_point(rec, latency)
+            # Đồng hồ thiết bị lệch nhiều (Wokwi chạy chậm hơn thời gian thực, NTP chưa đồng bộ lại)
+            # thì không dùng ts của thiết bị: lưu theo giờ ingest nhận và không tính độ trễ.
+            offset = t_recv - rec["ts"]
+            if abs(offset) <= self.max_skew_ms:
+                ts_ms, latency = rec["ts"], float(offset)
+            else:
+                ts_ms, latency = t_recv, None
+                self.counters["clock_skew"] += 1
+                if self.counters["clock_skew"] in (1, 10) or self.counters["clock_skew"] % 100 == 0:
+                    log.warning("Đồng hồ %s lệch %.1fs -> lưu theo giờ server (lần %d)",
+                                rec["device_id"], offset / 1000, self.counters["clock_skew"])
+            point = to_point(rec, ts_ms, latency, offset)
 
             if self.backlog:
                 self._flush_backlog()
@@ -164,18 +179,20 @@ class Ingestor:
             write_ms = (time.perf_counter() - t0) * 1000
             if ok:
                 self.counters["written"] += 1
-                self.window_latency.append(latency)
+                self.window_offset.append(offset)
+                if latency is not None:
+                    self.window_latency.append(latency)
                 self.window_write.append(write_ms)
-                log.debug("OK %s seq=%d latency=%dms write=%.1fms", rec["device_id"], rec["seq"],
-                          latency, write_ms)
+                log.debug("OK %s seq=%d offset=%dms write=%.1fms", rec["device_id"], rec["seq"],
+                          offset, write_ms)
             else:
                 self.backlog.append(point)
 
     # ---------- Thống kê pipeline ----------
     def emit_stats(self) -> None:
         with self.lock:
-            lat, wr = self.window_latency, self.window_write
-            self.window_latency, self.window_write = [], []
+            lat, wr, off = self.window_latency, self.window_write, self.window_offset
+            self.window_latency, self.window_write, self.window_offset = [], [], []
             c = dict(self.counters)
             backlog = len(self.backlog)
 
@@ -191,7 +208,8 @@ class Ingestor:
             "lat_p95_ms": round(percentile(lat, 0.95), 1),
             "lat_max_ms": round(max(lat), 1) if lat else 0.0,
             "write_avg_ms": round(statistics.fmean(wr), 2) if wr else 0.0,
-            "msgs_in_window": len(lat),
+            "clock_offset_avg_s": round(statistics.fmean(off) / 1000, 1) if off else 0.0,
+            "msgs_in_window": len(wr),
         }
         log.info("STATS %s", json.dumps(stats))
 

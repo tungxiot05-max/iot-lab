@@ -1,0 +1,39 @@
+{
+  "raw_rows": 461,
+  "duplicate_rows": 0,
+  "rows_after_clean": 461,
+  "missing_raw": {
+    "temperature": 0,
+    "humidity": 0,
+    "light": 0
+  },
+  "outliers": {
+    "temperature": 0,
+    "humidity": 0,
+    "method": "iqr"
+  },
+  "bins_total": 63,
+  "bins_empty": 22,
+  "bins_filled": 11,
+  "bins_still_missing": 11,
+  "scaler_params": {
+    "temperature": {
+      "min": 24.0,
+      "max": 45.27333333333333,
+      "mean": 35.092023809523816,
+      "std": 5.7654827732712155
+    },
+    "humidity": {
+      "min": 40.0,
+      "max": 63.5,
+      "mean": 54.46153846153846,
+      "std": 11.432850002147218
+    },
+    "light": {
+      "min": 904.6,
+      "max": 2077.2,
+      "mean": 1621.9718749999995,
+      "std": 567.9256644507244
+    }
+  }
+}

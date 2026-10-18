@@ -30,8 +30,7 @@ services:
     image: grafana/grafana-oss:11.2.0
     container_name: iot-grafana
     restart: unless-stopped
-    ports:
-      - "3000:3000"
+    network_mode: host
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}

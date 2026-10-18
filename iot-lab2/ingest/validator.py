@@ -48,7 +48,6 @@ FLOAT_FIELDS = ("temperature", "humidity", "light")
 INT_FIELDS = ("seq", "ts", "light_raw", "motion", "rssi", "uptime_s")
 
 MIN_VALID_TS_MS = 1_700_000_000_000   # 11/2023: nhỏ hơn => thiết bị chưa đồng bộ NTP
-MAX_FUTURE_SKEW_MS = 60_000
 
 
 class ValidationError(ValueError):
@@ -101,8 +100,7 @@ def validate(raw: bytes | str, topic: str, now_ms: int) -> dict:
 
     if rec["ts"] < MIN_VALID_TS_MS:
         raise ValidationError("ts quá nhỏ: thiết bị chưa đồng bộ NTP")
-    if rec["ts"] > now_ms + MAX_FUTURE_SKEW_MS:
-        raise ValidationError(f"ts lệch về tương lai {(rec['ts'] - now_ms) / 1000:.1f}s")
+    # Đồng hồ thiết bị lệch (nhanh hoặc chậm) không làm gói bị loại: ingest sẽ lưu theo giờ server.
 
     # Topic chuẩn: iot/<site>/<location>/<device_id>/telemetry
     parts = topic.split("/")

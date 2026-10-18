@@ -36,6 +36,8 @@ def seq_loss(seq: pd.Series) -> tuple[int, int]:
 
 def summarize(df: pd.DataFrame) -> pd.DataFrame:
     rows = []
+    if "latency_ms" not in df:
+        df = df.assign(latency_ms=np.nan)
     for dev, g in df.groupby("device_id"):
         lat = g["latency_ms"].dropna()
         exp, rec = seq_loss(g.sort_values("_time")["seq"]) if "seq" in g else (0, len(g))
@@ -47,6 +49,8 @@ def summarize(df: pd.DataFrame) -> pd.DataFrame:
             "lat_p50_ms": round(lat.quantile(0.5), 1), "lat_p95_ms": round(lat.quantile(0.95), 1),
             "lat_p99_ms": round(lat.quantile(0.99), 1), "lat_max_ms": round(lat.max(), 1),
             "lat_std_ms": round(lat.std(), 1),
+            "clock_skew_packets": int(g["latency_ms"].isna().sum()),
+            "clock_offset_avg_s": round(g["clock_offset_ms"].mean() / 1000, 1) if "clock_offset_ms" in g else None,
             "expected_by_seq": exp, "lost": exp - rec,
             "loss_pct": round(100 * (exp - rec) / exp, 2) if exp else 0.0,
         })
@@ -54,6 +58,9 @@ def summarize(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def plot(df: pd.DataFrame, path) -> None:
+    if "latency_ms" not in df or df["latency_ms"].dropna().empty:
+        print("Không có gói nào đo được độ trễ (đồng hồ thiết bị lệch) -> bỏ qua biểu đồ.")
+        return
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -94,7 +101,7 @@ def main() -> None:
         from common.influx import make_client, query_raw
         s = load_settings()
         with make_client(s) as client:
-            df = query_raw(client, s, args.start, args.stop, args.device, fields=["latency_ms", "seq"])
+            df = query_raw(client, s, args.start, args.stop, args.device, fields=["latency_ms", "seq", "clock_offset_ms"])
     if df.empty:
         print("Không có dữ liệu.")
         return

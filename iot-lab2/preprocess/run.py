@@ -121,7 +121,8 @@ def process_once(args, client=None, settings=None) -> None:
 
         if not args.no_write and client is not None:
             pts = to_points(out, dev, loc, args.method)
-            client.write_api().write(bucket=settings.bucket_processed, org=settings.influx_org, record=pts)
+            from influxdb_client.client.write_api import SYNCHRONOUS
+            client.write_api(write_options=SYNCHRONOUS).write(bucket=settings.bucket_processed, org=settings.influx_org, record=pts)
             log.info("Đã ghi %d điểm vào %s/sensor_processed", len(pts), settings.bucket_processed)
 
         if not args.quiet:
