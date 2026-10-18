@@ -26,10 +26,15 @@ Grafana (http://localhost:3000)
 | `ingest/mqtt_to_influx.py` | Subscribe MQTT, kiểm tra dữ liệu, ghi InfluxDB |
 | `ingest/validator.py` | Luật kiểm tra hợp lệ và theo dõi `seq` |
 | `common/` | Đọc `.env`, tạo bucket và retention policy |
+| `preprocess/pipeline.py` | Các bước tiền xử lý (làm sạch, outlier, resample, đặc trưng, chuẩn hoá) |
+| `preprocess/run.py` | Đọc `iot_raw`, chạy tiền xử lý, ghi `iot_processed`, xuất báo cáo |
+| `analysis/latency_report.py` | Thống kê độ trễ, tỷ lệ mất gói, vẽ biểu đồ |
 | `tools/fake_device.py` | Thiết bị giả lập để test khi không chạy Wokwi |
-| `tests/` | Unit test cho validator |
+| `tools/build_dashboard.py` | Sinh lại file dashboard Grafana |
+| `tests/` | Unit test cho validator và tiền xử lý |
 | `docker-compose.yml` | InfluxDB, Grafana, Mosquitto |
-| `grafana/provisioning/` | Datasource InfluxDB tự cấu hình |
+| `grafana/provisioning/` | Datasource InfluxDB và dashboard tự cấu hình |
+| `reports/` | Kết quả xuất ra: CSV, JSON, biểu đồ PNG dùng cho báo cáo |
 
 ## Yêu cầu
 
@@ -94,6 +99,52 @@ python tools/fake_device.py --host localhost --interval 1 --faults
 
 Cờ `--faults` chèn ngẫu nhiên spike, mất gói, gói trùng, JSON hỏng và NaN để kiểm tra khả năng xử lý lỗi.
 
+### 6. Tiền xử lý
+
+Cần có ít nhất 30–60 phút dữ liệu thô trước khi chạy.
+
+```bash
+python -m preprocess.run --start -1h                  # xử lý 1 giờ gần nhất (IQR)
+python -m preprocess.run --start -1h --method zscore  # dùng Z-score
+python -m preprocess.run --start -30m --loop 60       # chạy liên tục mỗi 60 s để dashboard có dữ liệu mới
+```
+
+Các bước (file `preprocess/pipeline.py`):
+
+| Bước | Cách làm | Lý do |
+|---|---|---|
+| 1. Làm sạch | Sắp xếp theo thời gian, bỏ bản ghi trùng thời điểm | Dữ liệu có thể đến không theo thứ tự hoặc bị gửi lặp |
+| 2. Outlier | Tính độ lệch so với trung vị trượt 5 mẫu, rồi áp IQR (k = 1,5) hoặc Z-score (\|z\| > 3); yêu cầu lệch tối thiểu 2 °C / 5 %RH | IQR/Z-score áp trực tiếp lên chuỗi có bước nhảy (đổi mức nhiệt trên Wokwi) sẽ báo nhầm; độ lệch so với trung vị chỉ làm nổi bật spike đơn lẻ |
+| 3. Resample | Trung bình theo cửa sổ 1 phút; motion thành tỷ lệ thời gian có chuyển động | Đưa dữ liệu về lưới thời gian đều, giảm nhiễu và dung lượng |
+| 4. Giá trị thiếu | Nội suy theo thời gian cho khoảng trống ≤ 5 cửa sổ; khoảng dài hơn để trống | Nội suy qua quãng mất dữ liệu dài sẽ tạo số liệu giả |
+| 5. Đặc trưng | `*_roll5` (rolling mean 5 cửa sổ), `*_delta` (chênh lệch giữa hai cửa sổ) | Xu hướng và tốc độ thay đổi, dùng cho cảnh báo hoặc mô hình |
+| 6. Chuẩn hoá | `*_norm` (Min-Max về [0, 1]), `*_z` (Z-score) | Đưa các đại lượng khác đơn vị về cùng thang đo |
+
+Kết quả được ghi vào bucket `iot_processed`, measurement `sensor_processed`. Trong thư mục `reports/` có:
+- `<device>_preprocess.png`: biểu đồ trước/sau xử lý, đánh dấu outlier và điểm nội suy
+- `<device>_report.json`: số bản ghi, trùng, outlier, cửa sổ trống/đã nội suy, tham số chuẩn hoá
+- `<device>_outlier_compare.csv`: so sánh số outlier giữa IQR và Z-score
+- `<device>_raw.csv`, `<device>_processed.csv`: dữ liệu trước và sau
+
+### 7. Dashboard Grafana
+
+Mở cổng 3000, đăng nhập bằng `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD`, vào **Dashboards → IoT Lab 2 → IoT Lab 2 – Giám sát cảm biến**. Dashboard tự làm mới mỗi 5 giây, gồm 3 hàng:
+
+1. **Real-time**: giá trị mới nhất và biểu đồ dữ liệu thô.
+2. **Sau tiền xử lý**: dữ liệu thô và sau xử lý chồng lên nhau, dữ liệu chuẩn hoá, delta. Cần chạy `preprocess.run --loop` để hàng này cập nhật liên tục.
+3. **Sức khoẻ pipeline**: tỷ lệ mất gói, số gói nhận/loại/mất/trùng, độ trễ từng gói và theo chu kỳ.
+
+Nếu Grafana đã chạy từ trước khi có file dashboard, chạy `docker compose restart grafana`.
+
+### 8. Đánh giá độ trễ và lưu trữ
+
+```bash
+python -m analysis.latency_report --start -1h
+docker exec iot-influxdb du -sh /var/lib/influxdb2/engine     # dung lượng dữ liệu trên đĩa
+```
+
+Kết quả: `reports/latency_summary.csv` (số gói, tốc độ gói/giây, độ trễ min/trung bình/p50/p95/p99/max, tỷ lệ mất gói tính từ `seq`) và `reports/latency.png`.
+
 ## Định dạng dữ liệu
 
 **Topic:** `iot/<site>/<location>/<device_id>/telemetry`. Ngoài ra có topic `.../status` nhận `online`/`offline` (MQTT Last Will).
@@ -122,7 +173,17 @@ Cờ `--faults` chèn ngẫu nhiên spike, mất gói, gói trùng, JSON hỏng 
 
 Measurement `pipeline_stats` (tag `component=ingest`): `received`, `written`, `invalid`, `duplicate`, `lost`, `reboot`, `loss_pct`, `lat_avg_ms`, `lat_p95_ms`, `lat_max_ms`, `write_avg_ms`, `backlog`.
 
-**Bucket `iot_processed`** (retention 30 ngày): dùng cho kết quả tiền xử lý.
+**Bucket `iot_processed`** (retention 30 ngày), measurement `sensor_processed`:
+
+| Loại | Tên | Ghi chú |
+|---|---|---|
+| tag | `device_id`, `location`, `method` | `method` = iqr hoặc zscore |
+| field | `temperature`, `humidity`, `light` | Trung bình mỗi cửa sổ, đã loại outlier và nội suy |
+| field | `motion_ratio` | Tỷ lệ thời gian có chuyển động trong cửa sổ |
+| field | `*_roll5`, `*_delta` | Đặc trưng: rolling mean, chênh lệch |
+| field | `*_norm`, `*_z` | Chuẩn hoá Min-Max và Z-score |
+| field | `n_samples` (int), `filled` (int 0/1) | Số mẫu thô trong cửa sổ; 1 = giá trị được nội suy |
+| time | đầu cửa sổ | Mỗi cửa sổ 1 phút |
 
 ## Xử lý lỗi, trùng lặp và mất mát
 

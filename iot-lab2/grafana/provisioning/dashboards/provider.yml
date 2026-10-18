@@ -1,0 +1,10 @@
+apiVersion: 1
+
+providers:
+  - name: iot-lab2
+    folder: IoT Lab 2
+    type: file
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards/json
